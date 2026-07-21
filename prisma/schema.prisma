@@ -1,0 +1,31 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Message {
+  id         String     @id @default(cuid())
+  content    String     @db.VarChar(500)
+  authorName String     @db.VarChar(100)
+  authorColor String    @db.VarChar(32)
+  createdAt  DateTime   @default(now())
+  reactions  Reaction[]
+
+  @@index([createdAt(sort: Desc)])
+}
+
+model Reaction {
+  id        String   @id @default(cuid())
+  messageId String
+  emoji     String   @db.VarChar(32)
+  count     Int      @default(1)
+  createdAt DateTime @default(now())
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, emoji])
+  @@index([messageId])
+}

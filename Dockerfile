@@ -17,8 +17,8 @@ COPY package*.json ./
 RUN npm ci --omit=dev
 
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/server ./server
-RUN mkdir -p /app/data
+COPY --from=builder /app/server/dist ./server/dist
+COPY --from=builder /app/prisma ./prisma
 
 EXPOSE 4000
-CMD ["node", "server/index.js"]
+CMD ["sh", "-c", "npm run db:deploy && node server/dist/index.js"]

@@ -1,13 +1,30 @@
 # Cockroach Ki Awwaz
 
-A full-stack anonymous message board built with React + Vite on the frontend and Express on the backend.
+A production-style anonymous message board with a modern React frontend and a typed Node.js API backed by PostgreSQL.
 
-## Tech Stack
+## Architecture
 
 - Frontend: React, TypeScript, Vite, Tailwind CSS
-- Backend: Node.js, Express
-- Persistence: JSON file storage (`data/messages.json`)
-- Deploy: Docker (single container)
+- API: Express (TypeScript), Zod request validation, Helmet, Morgan
+- Database: PostgreSQL + Prisma ORM
+- Runtime model: One Node service serving both `/api` and built frontend (`dist`)
+
+## Project Structure
+
+- `src/` - frontend app
+- `server/src/` - backend API source
+- `server/dist/` - backend build output
+- `prisma/` - schema and migrations
+
+## Environment Variables
+
+Copy `.env.example` to `.env` and set values:
+
+- `VITE_API_BASE_URL=/api`
+- `PORT=4000`
+- `NODE_ENV=development`
+- `FRONTEND_ORIGIN=http://localhost:5173`
+- `DATABASE_URL=postgresql://postgres:postgres@localhost:5432/cockroach_ki_awwaz?schema=public`
 
 ## Local Development
 
@@ -17,40 +34,44 @@ A full-stack anonymous message board built with React + Vite on the frontend and
 npm install
 ```
 
-2. Create env file:
+2. Start PostgreSQL locally:
 
 ```bash
-cp .env.example .env
+docker compose up -d db
 ```
 
-3. Run full stack in dev mode:
+3. Apply migrations:
+
+```bash
+npm run db:deploy
+```
+
+4. Start full app:
 
 ```bash
 npm run dev
 ```
 
-This starts:
-- Frontend on `http://localhost:5173`
-- Backend on `http://localhost:4000`
-
-Vite proxies `/api/*` requests to the backend.
+This runs:
+- Frontend at `http://localhost:5173`
+- Backend at `http://localhost:4000`
 
 ## API Endpoints
 
 - `GET /api/health`
-- `GET /api/messages`
+- `GET /api/messages?limit=50`
 - `POST /api/messages`
 - `POST /api/messages/:id/reactions`
 
-## Production Run (Without Docker)
+## Build and Run
 
-1. Build frontend:
+Build frontend + backend:
 
 ```bash
 npm run build
 ```
 
-2. Start backend in production mode (serves API + `dist` static app):
+Start production server:
 
 ```bash
 npm run start:prod
@@ -64,51 +85,25 @@ Build image:
 docker build -t cockroach-ki-awwaz .
 ```
 
-Run container:
+Run app container:
 
 ```bash
-docker run -p 4000:4000 --name cockroach-ki-awwaz cockroach-ki-awwaz
+docker run -p 4000:4000 --env DATABASE_URL="postgresql://postgres:postgres@host.docker.internal:5432/cockroach_ki_awwaz?schema=public" --name cockroach-ki-awwaz cockroach-ki-awwaz
 ```
 
-App will be available at `http://localhost:4000`.
+Container startup automatically runs `prisma migrate deploy` before starting API.
 
-## Netlify Deployment (Frontend + API On Same Domain)
+## Deployment Recommendation
 
-This repo now includes Netlify Functions for `/api/*` endpoints, so your site can work on Netlify without a separate Express host.
+For a professional setup:
 
-What is included:
-- `netlify.toml` redirecting `/api/*` to `/.netlify/functions/api/*`
-- `netlify/functions/api.js` implementing:
-	- `GET /api/health`
-	- `GET /api/messages`
-	- `POST /api/messages`
-	- `POST /api/messages/:id/reactions`
-- Persistent serverless storage via `@netlify/blobs`
+1. Deploy backend container to Render/Railway/Fly.io.
+2. Use managed PostgreSQL (Neon/Supabase/Railway Postgres).
+3. Deploy frontend to Netlify or Vercel with `VITE_API_BASE_URL` set to backend URL (for example `https://api.yourdomain.com/api`).
 
-Deploy steps:
+## Useful Commands
 
-1. Push latest code to your Git provider.
-2. In Netlify, create/import the site from this repo.
-3. Build command: `npm run build`
-4. Publish directory: `dist`
-5. Deploy.
-
-After deploy, this should work on your site domain:
-
-- `/api/health`
-- `/api/messages`
-
-Note: local development still uses Express (`npm run dev`) for fast iteration.
-
-## Deploy on Render/Railway/Fly.io
-
-Use Docker deploy with this repository. Set environment variables:
-
-- `NODE_ENV=production`
-- `PORT=4000`
-- `DATA_DIR=/app/data`
-
-Optional:
-- `VITE_API_BASE_URL=/api` (already default in frontend)
-
-Note: JSON file storage works for demos and small usage. For multi-instance or long-term production, move storage to a managed database.
+- `npm run db:generate` - regenerate Prisma client
+- `npm run db:migrate` - create/apply migration in development
+- `npm run db:deploy` - apply committed migrations (production-safe)
+- `npm run db:studio` - open Prisma Studio
