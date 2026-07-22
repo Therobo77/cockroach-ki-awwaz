@@ -1,7 +1,10 @@
 import { motion } from 'framer-motion'
-import { Bug } from 'lucide-react'
+import { Bug, Sun, Moon } from 'lucide-react'
+import { useTheme } from '../utils/theme'
 
 export default function Header() {
+  const { theme, toggle } = useTheme()
+
   return (
     <motion.header
       initial={{ opacity: 0, y: -20 }}
@@ -9,6 +12,20 @@ export default function Header() {
       transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
       className="relative z-10 pt-12 pb-6 text-center px-4"
     >
+      {/* Theme toggle */}
+      <motion.button
+        onClick={toggle}
+        whileHover={{ scale: 1.08 }}
+        whileTap={{ scale: 0.92 }}
+        title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+        className="absolute top-4 right-4 p-2 rounded-xl glass border border-void-800/50 text-void-500 hover:text-roach-500 transition-colors"
+      >
+        {theme === 'dark'
+          ? <Sun className="w-4 h-4" />
+          : <Moon className="w-4 h-4" />
+        }
+      </motion.button>
+
       {/* Ambient glow */}
       <div
         aria-hidden
@@ -34,7 +51,7 @@ export default function Header() {
 
         {/* Title */}
         <div>
-          <h1 className="font-display text-4xl md:text-5xl font-bold tracking-tight text-white leading-none">
+          <h1 className="font-display text-4xl md:text-5xl font-bold tracking-tight text-void-50 leading-none">
             Cockroach{' '}
             <span className="italic text-roach-500 text-glow">Ki Awwaz</span>
           </h1>

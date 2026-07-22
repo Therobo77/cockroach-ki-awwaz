@@ -12,6 +12,7 @@ model Message {
   content    String     @db.VarChar(500)
   authorName String     @db.VarChar(100)
   authorColor String    @db.VarChar(32)
+  imageUrl   String?    @db.VarChar(2048)
   createdAt  DateTime   @default(now())
   reactions  Reaction[]
 

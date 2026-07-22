@@ -11,5 +11,6 @@ export interface Message {
   authorColor: string
   timestamp: number
   reactions: Record<string, number>
+  imageUrl?: string
   pinned?: boolean
 }

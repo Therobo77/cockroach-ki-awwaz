@@ -43,6 +43,7 @@ const createMessageSchema = z.object({
   authorName: z.string().trim().min(2).max(100),
   authorColor: z.string().trim().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/),
   timestamp: z.number().int().positive().optional(),
+  imageUrl: z.string().url().max(2048).optional().or(z.literal('')).transform(v => v || undefined),
 })
 
 const reactionSchema = z.object({
@@ -54,6 +55,7 @@ function toApiMessage(message: {
   content: string
   authorName: string
   authorColor: string
+  imageUrl: string | null
   createdAt: Date
   reactions: Array<{ emoji: string; count: number }>
 }) {
@@ -62,6 +64,7 @@ function toApiMessage(message: {
     content: message.content,
     authorName: message.authorName,
     authorColor: message.authorColor,
+    imageUrl: message.imageUrl ?? undefined,
     timestamp: message.createdAt.getTime(),
     reactions: Object.fromEntries(message.reactions.map((item) => [item.emoji, item.count])),
   }
@@ -116,8 +119,7 @@ app.post('/api/messages', asyncHandler(async (req, res) => {
       ...(payload.id ? { id: payload.id } : {}),
       content: payload.content,
       authorName: payload.authorName,
-      authorColor: payload.authorColor,
-      ...(payload.timestamp ? { createdAt: new Date(payload.timestamp) } : {}),
+      authorColor: payload.authorColor,      ...(payload.imageUrl ? { imageUrl: payload.imageUrl } : {}),      ...(payload.timestamp ? { createdAt: new Date(payload.timestamp) } : {}),
     },
     include: {
       reactions: {

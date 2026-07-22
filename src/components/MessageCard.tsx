@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { formatDistanceToNow } from 'date-fns'
+import { ExternalLink, X } from 'lucide-react'
 import type { Message } from '../types'
 
 const REACTIONS = ['🔥', '💀', '👀', '🤝', '⚡', '🫀']
@@ -12,7 +13,9 @@ interface Props {
 }
 
 export default function MessageCard({ message, index, onReact }: Props) {
-  const [reacted, setReacted] = useState<Set<string>>(new Set())
+  const [reacted, setReacted]         = useState<Set<string>>(new Set())
+  const [imgExpanded, setImgExpanded] = useState(false)
+  const [imgError, setImgError]       = useState(false)
 
   async function handleReaction(emoji: string) {
     if (reacted.has(emoji)) return
@@ -68,6 +71,71 @@ export default function MessageCard({ message, index, onReact }: Props) {
         <p className="text-sm leading-relaxed text-void-200 whitespace-pre-wrap break-words">
           {message.content}
         </p>
+
+        {/* Attached image */}
+        {message.imageUrl && !imgError && (
+          <div className="mt-3">
+            <button
+              onClick={() => setImgExpanded(true)}
+              className="relative block w-full rounded-xl overflow-hidden border border-void-800 hover:border-void-600 transition-colors group/img"
+            >
+              <img
+                src={message.imageUrl}
+                alt="Attached"
+                className="w-full max-h-64 object-cover group-hover/img:scale-[1.02] transition-transform duration-300"
+                loading="lazy"
+                onError={() => setImgError(true)}
+              />
+              <div className="absolute inset-0 bg-black/0 group-hover/img:bg-black/20 transition-all flex items-center justify-center opacity-0 group-hover/img:opacity-100">
+                <ExternalLink className="w-5 h-5 text-white drop-shadow" />
+              </div>
+            </button>
+          </div>
+        )}
+
+        {/* Lightbox */}
+        <AnimatePresence>
+          {imgExpanded && message.imageUrl && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setImgExpanded(false)}
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 cursor-zoom-out"
+            >
+              <motion.div
+                initial={{ scale: 0.92 }}
+                animate={{ scale: 1 }}
+                exit={{ scale: 0.92 }}
+                onClick={(e) => e.stopPropagation()}
+                className="relative max-w-3xl w-full"
+              >
+                <img
+                  src={message.imageUrl}
+                  alt="Full size"
+                  className="w-full rounded-2xl shadow-2xl"
+                />
+                <div className="absolute top-2 right-2 flex gap-2">
+                  <a
+                    href={message.imageUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-2 rounded-xl bg-black/60 text-white hover:bg-black/80 transition-colors"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                  </a>
+                  <button
+                    onClick={() => setImgExpanded(false)}
+                    className="p-2 rounded-xl bg-black/60 text-white hover:bg-black/80 transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Reactions */}
         <div className="mt-4 flex items-center gap-1.5 flex-wrap">
