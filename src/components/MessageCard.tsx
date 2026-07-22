@@ -9,10 +9,29 @@ const REACTIONS = ['🔥', '💀', '👀', '🤝', '⚡', '🫀']
 interface Props {
   message: Message
   index: number
+  myName?: string
   onReact: (messageId: string, emoji: string) => Promise<void>
 }
 
-export default function MessageCard({ message, index, onReact }: Props) {
+function renderContent(text: string, myName?: string) {
+  const parts = text.split(/(@[A-Za-z0-9_]+)/g)
+  return parts.map((part, i) => {
+    if (/^@[A-Za-z0-9_]+$/.test(part)) {
+      const isMe = myName && part === `@${myName}`
+      return (
+        <span
+          key={i}
+          className={`font-semibold rounded px-0.5 ${isMe ? 'text-roach-500 bg-roach-500/10' : 'text-void-300 bg-void-800/60'}`}
+        >
+          {part}
+        </span>
+      )
+    }
+    return part
+  })
+}
+
+export default function MessageCard({ message, index, myName, onReact }: Props) {
   const [reacted, setReacted]         = useState<Set<string>>(new Set())
   const [imgExpanded, setImgExpanded] = useState(false)
   const [imgError, setImgError]       = useState(false)
@@ -69,7 +88,7 @@ export default function MessageCard({ message, index, onReact }: Props) {
 
         {/* Content */}
         <p className="text-sm leading-relaxed text-void-200 whitespace-pre-wrap break-words">
-          {message.content}
+          {renderContent(message.content, myName)}
         </p>
 
         {/* Attached image */}

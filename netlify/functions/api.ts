@@ -34,7 +34,10 @@ const createMessageSchema = z.object({
 })
 
 const reactionSchema = z.object({
-  emoji: z.string().trim().min(1).max(32),
+  emoji:        z.string().trim().min(1).max(32),
+  reactorId:    z.string().optional(),
+  reactorName:  z.string().optional(),
+  reactorColor: z.string().optional(),
 })
 
 function toApiMessage(message: {
@@ -146,6 +149,31 @@ export const handler: Handler = async (event: HandlerEvent) => {
       })))
     }
 
+    // GET /api/notifications?deviceId=xxx
+    if (normalizedPath === '/api/notifications' && method === 'GET') {
+      const deviceId = event.queryStringParameters?.deviceId
+      if (!deviceId) return json(400, { error: 'deviceId required' })
+      const notes = await prisma.notification.findMany({
+        where: { recipientId: deviceId },
+        orderBy: { createdAt: 'desc' },
+        take: 30,
+      })
+      return json(200, notes.map(n => ({ ...n, createdAt: n.createdAt.getTime() })))
+    }
+
+    // POST /api/notifications/read
+    if (normalizedPath === '/api/notifications/read' && method === 'POST') {
+      let body: Record<string, unknown> = {}
+      try { body = JSON.parse(event.body ?? '{}') } catch { /* ignore */ }
+      const deviceId = String(body.deviceId ?? '')
+      if (!deviceId) return json(400, { error: 'deviceId required' })
+      await prisma.notification.updateMany({
+        where: { recipientId: deviceId, read: false },
+        data:  { read: true },
+      })
+      return json(200, { ok: true })
+    }
+
     // GET /api/messages
     if (isMessages && method === 'GET') {
       const limit = Math.min(
@@ -190,6 +218,23 @@ export const handler: Handler = async (event: HandlerEvent) => {
       })
 
       return json(201, toApiMessage(created))
+
+      // Fire mention notifications (non-blocking)
+      void (async () => {
+        const mentionPattern = /@([A-Za-z0-9_]+)/g
+        let m: RegExpExecArray | null
+        const excerpt = created.content.slice(0, 100)
+        while ((m = mentionPattern.exec(created.content)) !== null) {
+          const mentionedName = m[1]
+          if (mentionedName === payload.authorName) continue // don't self-notify
+          const recipient = await prisma.userDevice.findFirst({ where: { authorName: mentionedName }, select: { id: true } })
+          if (recipient) {
+            await prisma.notification.create({
+              data: { recipientId: recipient.id, type: 'mention', messageId: created.id, fromName: payload.authorName, fromColor: payload.authorColor, excerpt },
+            })
+          }
+        }
+      })()
     }
 
     // POST /api/messages/:id/reactions
@@ -227,6 +272,25 @@ export const handler: Handler = async (event: HandlerEvent) => {
         where: { id: messageId },
         include: { reactions: { select: { emoji: true, count: true } } },
       })
+
+      // Fire reaction notification (non-blocking)
+      void (async () => {
+        const recipient = await prisma.userDevice.findFirst({ where: { authorName: updated.authorName }, select: { id: true } })
+        const reactorId = parsed.data.reactorId ?? ''
+        if (recipient && recipient.id !== reactorId) {
+          await prisma.notification.create({
+            data: {
+              recipientId: recipient.id,
+              type: 'reaction',
+              messageId,
+              fromName:  parsed.data.reactorName  ?? 'Someone',
+              fromColor: parsed.data.reactorColor ?? '#a3e635',
+              emoji:     parsed.data.emoji,
+              excerpt:   updated.content.slice(0, 100),
+            },
+          })
+        }
+      })()
 
       return json(200, toApiMessage(updated))
     }

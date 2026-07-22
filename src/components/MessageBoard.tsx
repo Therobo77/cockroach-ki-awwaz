@@ -9,10 +9,11 @@ type SortMode = 'latest' | 'oldest' | 'hot'
 
 interface Props {
   messages: Message[]
+  myName?: string
   onReact: (messageId: string, emoji: string) => Promise<void>
 }
 
-export default function MessageBoard({ messages, onReact }: Props) {
+export default function MessageBoard({ messages, myName, onReact }: Props) {
   const [sort, setSort] = useState<SortMode>('latest')
   const [query, setQuery] = useState('')
 
@@ -123,6 +124,7 @@ export default function MessageBoard({ messages, onReact }: Props) {
                 key={msg.id}
                 message={msg}
                 index={i}
+                myName={myName}
                 onReact={handleReact}
               />
             ))}

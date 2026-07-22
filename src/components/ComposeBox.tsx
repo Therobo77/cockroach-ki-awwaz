@@ -1,9 +1,10 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Send, Fingerprint, ImagePlus, X, AlertCircle, Upload, Link2 } from 'lucide-react'
+import { Send, Fingerprint, ImagePlus, X, AlertCircle, Upload, Link2, AtSign } from 'lucide-react'
 import { v4 as uuidv4 } from 'uuid'
 import { getIdentity, type Identity } from '../utils/identity'
 import { compressImage, formatBytes } from '../utils/imageUpload'
+import { getUsers } from '../utils/api'
 import type { Message } from '../types'
 
 interface Props {
@@ -13,6 +14,7 @@ interface Props {
 
 const MAX_CHARS = 500
 const ACCEPTED  = 'image/jpeg,image/png,image/webp,image/gif'
+const MENTION_RE = /@([A-Za-z0-9_]*)$/
 
 function isValidImageUrl(url: string): boolean {
   if (url.startsWith('data:image/')) return true
@@ -31,13 +33,55 @@ export default function ComposeBox({ onNewMessage, onSubmitMessage }: Props) {
   const [identityLoading, setIdentityLoading] = useState(true)
   const [sending, setSending]                 = useState(false)
   const [submitError, setSubmitError]         = useState<string | null>(null)
-  const textareaRef  = useRef<HTMLTextAreaElement>(null)
+  // @mention autocomplete
+  const [mentionQuery, setMentionQuery]       = useState<string | null>(null)
+  const [mentionUsers, setMentionUsers]       = useState<string[]>([])
+  const [mentionIndex, setMentionIndex]       = useState(0)
+  const textareaRef   = useRef<HTMLTextAreaElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
   const fileInputRef  = useRef<HTMLInputElement>(null)
+  const allUsersRef   = useRef<string[]>([])
 
   useEffect(() => {
     getIdentity().then(setIdentity).finally(() => setIdentityLoading(false))
+    // Pre-fetch users for @mention
+    getUsers().then(u => { allUsersRef.current = u.map(x => x.authorName) }).catch(() => null)
   }, [])
+
+  // Detect @mention at cursor
+  const handleContentChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value
+    setContent(val)
+    const cursor = e.target.selectionStart ?? val.length
+    const textBeforeCursor = val.slice(0, cursor)
+    const match = MENTION_RE.exec(textBeforeCursor)
+    if (match) {
+      const q = match[1].toLowerCase()
+      setMentionQuery(q)
+      setMentionUsers(allUsersRef.current.filter(n => n.toLowerCase().startsWith(q)).slice(0, 6))
+      setMentionIndex(0)
+    } else {
+      setMentionQuery(null)
+      setMentionUsers([])
+    }
+  }, [])
+
+  function insertMention(name: string) {
+    const ta = textareaRef.current
+    if (!ta) return
+    const cursor = ta.selectionStart ?? content.length
+    const before = content.slice(0, cursor)
+    const after  = content.slice(cursor)
+    const newBefore = before.replace(MENTION_RE, `@${name} `)
+    const newContent = newBefore + after
+    setContent(newContent)
+    setMentionQuery(null)
+    setMentionUsers([])
+    setTimeout(() => {
+      ta.focus()
+      ta.setSelectionRange(newBefore.length, newBefore.length)
+    }, 0)
+  }
 
   const charCount  = content.trim().length
   const validImage = imageUrl.trim() !== '' && isValidImageUrl(imageUrl.trim())
@@ -45,6 +89,13 @@ export default function ComposeBox({ onNewMessage, onSubmitMessage }: Props) {
                      (!imageUrl.trim() || validImage)
 
   function handleKeyDown(e: React.KeyboardEvent) {
+    // Handle mention dropdown navigation
+    if (mentionQuery !== null && mentionUsers.length > 0) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setMentionIndex(i => (i + 1) % mentionUsers.length); return }
+      if (e.key === 'ArrowUp')   { e.preventDefault(); setMentionIndex(i => (i - 1 + mentionUsers.length) % mentionUsers.length); return }
+      if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); insertMention(mentionUsers[mentionIndex]); return }
+      if (e.key === 'Escape')    { setMentionQuery(null); setMentionUsers([]); return }
+    }
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && canSend) submit()
   }
 
@@ -136,12 +187,38 @@ export default function ComposeBox({ onNewMessage, onSubmitMessage }: Props) {
         <textarea
           ref={textareaRef}
           value={content}
-          onChange={(e) => setContent(e.target.value)}
+          onChange={handleContentChange}
           onKeyDown={handleKeyDown}
-          placeholder="Say something... anything. No one knows it's you."
+          placeholder="Say something... type @ to mention a user"
           rows={4}
           className="w-full bg-transparent px-4 py-4 text-sm leading-relaxed text-void-200 placeholder:text-void-700 font-sans focus:outline-none"
         />
+
+        {/* @mention dropdown */}
+        <AnimatePresence>
+          {mentionQuery !== null && mentionUsers.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.12 }}
+              className="mx-4 mb-2 rounded-xl glass border border-void-800 overflow-hidden"
+            >
+              {mentionUsers.map((name, i) => (
+                <button
+                  key={name}
+                  onMouseDown={(e) => { e.preventDefault(); insertMention(name) }}
+                  className={`w-full flex items-center gap-2 px-3 py-2 text-left transition-colors ${
+                    i === mentionIndex ? 'bg-roach-500/15 text-roach-400' : 'text-void-300 hover:bg-void-900/60'
+                  }`}
+                >
+                  <AtSign className="w-3 h-3 flex-shrink-0 opacity-50" />
+                  <span className="font-mono text-xs">{name}</span>
+                </button>
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Image panel */}
         <AnimatePresence>

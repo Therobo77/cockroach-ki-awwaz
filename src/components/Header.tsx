@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion'
 import { Bug, Sun, Moon } from 'lucide-react'
 import { useTheme } from '../utils/theme'
+import NotificationBell from './NotificationBell'
 
 export default function Header() {
   const { theme, toggle } = useTheme()
@@ -12,19 +13,19 @@ export default function Header() {
       transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
       className="relative z-10 pt-12 pb-6 text-center px-4"
     >
-      {/* Theme toggle */}
-      <motion.button
-        onClick={toggle}
-        whileHover={{ scale: 1.08 }}
-        whileTap={{ scale: 0.92 }}
-        title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
-        className="absolute top-4 right-4 p-2 rounded-xl glass border border-void-800/50 text-void-500 hover:text-roach-500 transition-colors"
-      >
-        {theme === 'dark'
-          ? <Sun className="w-4 h-4" />
-          : <Moon className="w-4 h-4" />
-        }
-      </motion.button>
+      {/* Top-right controls */}
+      <div className="absolute top-4 right-4 flex items-center gap-2">
+        <NotificationBell />
+        <motion.button
+          onClick={toggle}
+          whileHover={{ scale: 1.08 }}
+          whileTap={{ scale: 0.92 }}
+          title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+          className="p-2 rounded-xl glass border border-void-800/50 text-void-500 hover:text-roach-500 transition-colors"
+        >
+          {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+        </motion.button>
+      </div>
 
       {/* Ambient glow */}
       <div

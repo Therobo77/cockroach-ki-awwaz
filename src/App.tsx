@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { MessageSquare, Users } from 'lucide-react'
 import { getMessages, addMessage, addReaction } from './utils/api.ts'
+import { getIdentity, type Identity } from './utils/identity.ts'
 import type { Message } from './types'
 import Header from './components/Header'
 import ComposeBox from './components/ComposeBox'
@@ -11,21 +12,20 @@ import UsersTable from './components/UsersTable'
 type Tab = 'messages' | 'users'
 
 export default function App() {
-  const [tab, setTab]         = useState<Tab>('messages')
+  const [tab, setTab]           = useState<Tab>('messages')
   const [messages, setMessages] = useState<Message[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError]     = useState<string | null>(null)
+  const [loading, setLoading]   = useState(true)
+  const [error, setError]       = useState<string | null>(null)
+  const [identity, setIdentity] = useState<Identity | null>(null)
 
   useEffect(() => {
     async function load() {
-      try {
-        const data = await getMessages()
-        setMessages(data)
-      } catch {
-        setError('Could not load messages. Please try again.')
-      } finally {
-        setLoading(false)
-      }
+      const [data] = await Promise.all([
+        getMessages().catch(() => { setError('Could not load messages.'); return [] }),
+        getIdentity().then(setIdentity).catch(() => null),
+      ])
+      setMessages(data)
+      setLoading(false)
     }
     void load()
   }, [])
@@ -35,9 +35,10 @@ export default function App() {
   }, [])
 
   const handleReact = useCallback(async (messageId: string, emoji: string) => {
-    const updatedMessage = await addReaction(messageId, emoji)
+    const reactor = identity ? { id: identity.id, name: identity.name, color: identity.color } : undefined
+    const updatedMessage = await addReaction(messageId, emoji, reactor)
     setMessages((prev) => prev.map((msg) => (msg.id === updatedMessage.id ? updatedMessage : msg)))
-  }, [])
+  }, [identity])
 
   const TABS: { key: Tab; label: string; Icon: typeof MessageSquare }[] = [
     { key: 'messages', label: 'Messages', Icon: MessageSquare },
@@ -103,7 +104,7 @@ export default function App() {
             ) : error ? (
               <div className="mx-auto mt-8 w-full max-w-2xl px-4 text-sm text-red-300">{error}</div>
             ) : (
-              <MessageBoard messages={messages} onReact={handleReact} />
+              <MessageBoard messages={messages} myName={identity?.name} onReact={handleReact} />
             )}
           </>
         ) : (
