@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Send, Fingerprint, ImagePlus, X, AlertCircle } from 'lucide-react'
+import { Send, Fingerprint, ImagePlus, X, AlertCircle, Upload, Link2 } from 'lucide-react'
 import { v4 as uuidv4 } from 'uuid'
 import { getIdentity, type Identity } from '../utils/identity'
+import { compressImage, formatBytes } from '../utils/imageUpload'
 import type { Message } from '../types'
 
 interface Props {
@@ -11,40 +12,61 @@ interface Props {
 }
 
 const MAX_CHARS = 500
+const ACCEPTED  = 'image/jpeg,image/png,image/webp,image/gif'
 
 function isValidImageUrl(url: string): boolean {
-  try {
-    const u = new URL(url)
-    return /^https?:/.test(u.protocol)
-  } catch {
-    return false
-  }
+  if (url.startsWith('data:image/')) return true
+  try { return /^https?:/.test(new URL(url).protocol) } catch { return false }
 }
 
 export default function ComposeBox({ onNewMessage, onSubmitMessage }: Props) {
-  const [content, setContent]           = useState('')
-  const [imageUrl, setImageUrl]         = useState('')
-  const [showImageInput, setShowImageInput] = useState(false)
-  const [imageError, setImageError]     = useState(false)
-  const [identity, setIdentity]         = useState<Identity | null>(null)
+  const [content, setContent]                 = useState('')
+  const [imageUrl, setImageUrl]               = useState('')
+  const [imageTab, setImageTab]               = useState<'url' | 'upload'>('url')
+  const [showImageInput, setShowImageInput]   = useState(false)
+  const [imageError, setImageError]           = useState(false)
+  const [uploading, setUploading]             = useState(false)
+  const [uploadInfo, setUploadInfo]           = useState<string | null>(null)
+  const [identity, setIdentity]               = useState<Identity | null>(null)
   const [identityLoading, setIdentityLoading] = useState(true)
-  const [sending, setSending]           = useState(false)
-  const [submitError, setSubmitError]   = useState<string | null>(null)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const [sending, setSending]                 = useState(false)
+  const [submitError, setSubmitError]         = useState<string | null>(null)
+  const textareaRef  = useRef<HTMLTextAreaElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
+  const fileInputRef  = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    getIdentity()
-      .then(setIdentity)
-      .finally(() => setIdentityLoading(false))
+    getIdentity().then(setIdentity).finally(() => setIdentityLoading(false))
   }, [])
 
   const charCount  = content.trim().length
   const validImage = imageUrl.trim() !== '' && isValidImageUrl(imageUrl.trim())
-  const canSend    = charCount > 0 && charCount <= MAX_CHARS && identity !== null && (!imageUrl.trim() || validImage)
+  const canSend    = charCount > 0 && charCount <= MAX_CHARS && identity !== null && !uploading &&
+                     (!imageUrl.trim() || validImage)
 
   function handleKeyDown(e: React.KeyboardEvent) {
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && canSend) submit()
+  }
+
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+
+    setUploading(true)
+    setImageError(false)
+    setUploadInfo(`Compressing ${formatBytes(file.size)}…`)
+    try {
+      const dataUrl = await compressImage(file)
+      const outKB   = Math.round(dataUrl.length / 1024 / 1.37)
+      setImageUrl(dataUrl)
+      setUploadInfo(`Compressed to ~${outKB} KB`)
+    } catch {
+      setImageError(true)
+      setUploadInfo(null)
+    } finally {
+      setUploading(false)
+    }
   }
 
   async function submit() {
@@ -67,6 +89,7 @@ export default function ComposeBox({ onNewMessage, onSubmitMessage }: Props) {
       onNewMessage(created)
       setContent('')
       setImageUrl('')
+      setUploadInfo(null)
       setShowImageInput(false)
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : 'Failed to send message')
@@ -77,9 +100,9 @@ export default function ComposeBox({ onNewMessage, onSubmitMessage }: Props) {
     setTimeout(() => textareaRef.current?.focus(), 50)
   }
 
-  const progress     = Math.min((charCount / MAX_CHARS) * 100, 100)
-  const isNearLimit  = charCount > MAX_CHARS * 0.85
-  const isOverLimit  = charCount > MAX_CHARS
+  const progress    = Math.min((charCount / MAX_CHARS) * 100, 100)
+  const isNearLimit = charCount > MAX_CHARS * 0.85
+  const isOverLimit = charCount > MAX_CHARS
 
   return (
     <motion.div
@@ -96,13 +119,9 @@ export default function ComposeBox({ onNewMessage, onSubmitMessage }: Props) {
               <span className="font-mono text-xs text-void-700 animate-pulse">resolving identity…</span>
             ) : identity ? (
               <>
-                <div
-                  className="w-2 h-2 rounded-full animate-pulse-slow"
-                  style={{ backgroundColor: identity.color, boxShadow: `0 0 8px ${identity.color}` }}
-                />
-                <span className="font-mono text-xs" style={{ color: identity.color }}>
-                  {identity.name}
-                </span>
+                <div className="w-2 h-2 rounded-full animate-pulse-slow"
+                  style={{ backgroundColor: identity.color, boxShadow: `0 0 8px ${identity.color}` }} />
+                <span className="font-mono text-xs" style={{ color: identity.color }}>{identity.name}</span>
               </>
             ) : null}
           </div>
@@ -112,10 +131,8 @@ export default function ComposeBox({ onNewMessage, onSubmitMessage }: Props) {
           </div>
         </div>
 
-        {/* Divider */}
         <div className="h-px bg-gradient-to-r from-transparent via-void-800 to-transparent mx-4" />
 
-        {/* Textarea */}
         <textarea
           ref={textareaRef}
           value={content}
@@ -126,7 +143,7 @@ export default function ComposeBox({ onNewMessage, onSubmitMessage }: Props) {
           className="w-full bg-transparent px-4 py-4 text-sm leading-relaxed text-void-200 placeholder:text-void-700 font-sans focus:outline-none"
         />
 
-        {/* Image URL input */}
+        {/* Image panel */}
         <AnimatePresence>
           {showImageInput && (
             <motion.div
@@ -136,43 +153,104 @@ export default function ComposeBox({ onNewMessage, onSubmitMessage }: Props) {
               transition={{ duration: 0.2 }}
               className="overflow-hidden"
             >
-              <div className="mx-4 mb-3">
-                <div className="relative">
-                  <input
-                    ref={imageInputRef}
-                    type="url"
-                    value={imageUrl}
-                    onChange={(e) => { setImageUrl(e.target.value); setImageError(false) }}
-                    placeholder="https://i.imgur.com/…  or any image URL"
-                    className="w-full pl-3 pr-8 py-2 rounded-lg bg-void-900/40 border border-void-800 text-void-300 placeholder:text-void-700 font-mono text-xs focus:outline-none focus:border-roach-500/50 transition-all"
-                  />
-                  {imageUrl && (
+              <div className="mx-4 mb-3 space-y-2">
+                {/* Tab switch */}
+                <div className="flex gap-1 p-0.5 rounded-lg bg-void-900/60 border border-void-800 w-fit">
+                  {(['url', 'upload'] as const).map((tab) => (
                     <button
-                      onClick={() => { setImageUrl(''); setImageError(false) }}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-void-600 hover:text-void-400"
+                      key={tab}
+                      onClick={() => { setImageTab(tab); setImageUrl(''); setUploadInfo(null); setImageError(false) }}
+                      className={`relative px-3 py-1 rounded-md font-mono text-[10px] tracking-widest uppercase transition-all duration-200 flex items-center gap-1.5 ${
+                        imageTab === tab ? 'text-void-950' : 'text-void-600 hover:text-void-400'
+                      }`}
                     >
-                      <X className="w-3 h-3" />
+                      {imageTab === tab && (
+                        <motion.span layoutId="img-tab" className="absolute inset-0 rounded-md bg-roach-500"
+                          transition={{ type: 'spring', bounce: 0.2, duration: 0.4 }} />
+                      )}
+                      <span className="relative z-10 flex items-center gap-1">
+                        {tab === 'url' ? <Link2 className="w-2.5 h-2.5" /> : <Upload className="w-2.5 h-2.5" />}
+                        {tab === 'url' ? 'URL' : 'Upload'}
+                      </span>
                     </button>
-                  )}
+                  ))}
                 </div>
 
-                {/* Image preview */}
-                {validImage && (
-                  <div className="mt-2 relative rounded-lg overflow-hidden border border-void-800 max-h-48">
+                {imageTab === 'url' ? (
+                  <div className="relative">
+                    <input
+                      ref={imageInputRef}
+                      type="url"
+                      value={imageUrl}
+                      onChange={(e) => { setImageUrl(e.target.value); setImageError(false) }}
+                      placeholder="https://i.imgur.com/… or any image URL"
+                      className="w-full pl-3 pr-8 py-2 rounded-lg bg-void-900/40 border border-void-800 text-void-300 placeholder:text-void-700 font-mono text-xs focus:outline-none focus:border-roach-500/50 transition-all"
+                    />
+                    {imageUrl && (
+                      <button onClick={() => { setImageUrl(''); setImageError(false) }}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-void-600 hover:text-void-400">
+                        <X className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div>
+                    {/* Hidden file input */}
+                    <input ref={fileInputRef} type="file" accept={ACCEPTED}
+                      onChange={handleFileChange} className="hidden" />
+
+                    {imageUrl ? (
+                      <div className="flex items-center justify-between p-2 rounded-lg bg-void-900/40 border border-void-800">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <img src={imageUrl} alt="" className="w-8 h-8 rounded object-cover flex-shrink-0" />
+                          <span className="font-mono text-xs text-void-400 truncate">{uploadInfo}</span>
+                        </div>
+                        <button onClick={() => { setImageUrl(''); setUploadInfo(null) }}
+                          className="ml-2 flex-shrink-0 text-void-600 hover:text-void-400">
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={uploading}
+                        className="w-full flex flex-col items-center gap-2 py-5 rounded-lg border-2 border-dashed border-void-800 hover:border-roach-500/50 text-void-600 hover:text-void-400 transition-all"
+                      >
+                        {uploading ? (
+                          <>
+                            <div className="w-5 h-5 border-2 border-roach-500/30 border-t-roach-500 rounded-full animate-spin" />
+                            <span className="font-mono text-xs">{uploadInfo}</span>
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="w-5 h-5" />
+                            <span className="font-mono text-xs">Click to choose image</span>
+                            <span className="font-mono text-[10px] text-void-700">JPEG · PNG · WebP · max ~200 KB output</span>
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {/* Preview */}
+                {validImage && !imageUrl.startsWith('data:') && (
+                  <div className="relative rounded-lg overflow-hidden border border-void-800 max-h-48">
                     {imageError ? (
-                      <div className="flex items-center gap-2 p-3 text-void-600 font-mono text-xs">
+                      <div className="flex items-center gap-2 p-3 font-mono text-xs">
                         <AlertCircle className="w-3.5 h-3.5 text-red-400" />
                         <span className="text-red-400">Can't load image — check the URL</span>
                       </div>
                     ) : (
-                      <img
-                        src={imageUrl.trim()}
-                        alt="Preview"
+                      <img src={imageUrl.trim()} alt="Preview"
                         className="w-full max-h-48 object-cover"
-                        onError={() => setImageError(true)}
-                        onLoad={() => setImageError(false)}
-                      />
+                        onError={() => setImageError(true)} onLoad={() => setImageError(false)} />
                     )}
+                  </div>
+                )}
+                {imageUrl.startsWith('data:') && (
+                  <div className="relative rounded-lg overflow-hidden border border-void-800 max-h-48">
+                    <img src={imageUrl} alt="Preview" className="w-full max-h-48 object-cover" />
                   </div>
                 )}
               </div>
@@ -183,31 +261,18 @@ export default function ComposeBox({ onNewMessage, onSubmitMessage }: Props) {
         {/* Footer */}
         <div className="flex items-center justify-between px-4 pb-4">
           <div className="flex items-center gap-3">
-            {/* Char counter */}
             <div className="relative w-20 h-1 rounded-full bg-void-900 overflow-hidden">
-              <motion.div
-                className="absolute inset-y-0 left-0 rounded-full"
+              <motion.div className="absolute inset-y-0 left-0 rounded-full"
                 style={{ backgroundColor: isOverLimit ? '#f87171' : isNearLimit ? '#facc15' : '#a3e635' }}
-                animate={{ width: `${progress}%` }}
-                transition={{ duration: 0.15 }}
-              />
+                animate={{ width: `${progress}%` }} transition={{ duration: 0.15 }} />
             </div>
             <span className={`font-mono text-xs tabular-nums ${isOverLimit ? 'text-red-400' : isNearLimit ? 'text-yellow-400' : 'text-void-600'}`}>
               {MAX_CHARS - charCount}
             </span>
-
-            {/* Image toggle */}
             <button
-              onClick={() => {
-                setShowImageInput((v) => !v)
-                if (!showImageInput) setTimeout(() => imageInputRef.current?.focus(), 50)
-              }}
-              title="Attach image URL"
-              className={`p-1.5 rounded-lg transition-colors ${
-                showImageInput || validImage
-                  ? 'text-roach-500 bg-roach-500/10'
-                  : 'text-void-600 hover:text-void-400'
-              }`}
+              onClick={() => { setShowImageInput(v => !v); if (!showImageInput) setTimeout(() => imageInputRef.current?.focus(), 50) }}
+              title="Attach image"
+              className={`p-1.5 rounded-lg transition-colors ${showImageInput || validImage ? 'text-roach-500 bg-roach-500/10' : 'text-void-600 hover:text-void-400'}`}
             >
               <ImagePlus className="w-3.5 h-3.5" />
             </button>

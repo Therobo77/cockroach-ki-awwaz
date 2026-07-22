@@ -10,7 +10,9 @@ const createMessageSchema = z.object({
   authorName: z.string().trim().min(2).max(100),
   authorColor: z.string().trim().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/),
   timestamp: z.number().int().positive().optional(),
-  imageUrl: z.string().url().max(2048).optional().or(z.literal('')).transform(v => v || undefined),
+  imageUrl: z.string().max(400000)
+    .refine(v => v.startsWith('data:image/') || /^https?:\/\//.test(v), 'Must be image URL or data URL')
+    .optional().or(z.literal('')).transform(v => v || undefined),
 })
 
 const reactionSchema = z.object({
