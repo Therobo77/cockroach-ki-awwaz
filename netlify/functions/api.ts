@@ -42,7 +42,7 @@ function toApiMessage(message: {
   content: string
   authorName: string
   authorColor: string
-  imageUrl: string | null
+  imageUrl?: string | null
   createdAt: Date
   reactions: Array<{ emoji: string; count: number }>
 }) {
