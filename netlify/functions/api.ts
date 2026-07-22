@@ -142,6 +142,7 @@ export const handler: Handler = async (event: HandlerEvent) => {
     return json(404, { error: 'Not found' })
   } catch (err) {
     console.error(err)
-    return json(500, { error: 'Internal server error' })
+    const message = err instanceof Error ? err.message : String(err)
+    return json(500, { error: 'Internal server error', detail: message })
   }
 }
