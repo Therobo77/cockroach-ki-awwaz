@@ -2,9 +2,10 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Send, Fingerprint, ImagePlus, X, AlertCircle, Upload, Link2, AtSign } from 'lucide-react'
 import { v4 as uuidv4 } from 'uuid'
-import { getIdentity, type Identity } from '../utils/identity'
+import { getIdentity, clearGoogleIdentity, type Identity, type GoogleProfile } from '../utils/identity'
 import { compressImage, formatBytes } from '../utils/imageUpload'
 import { getUsers } from '../utils/api'
+import GoogleSignInButton from './GoogleSignInButton'
 import type { Message } from '../types'
 
 interface Props {
@@ -43,10 +44,22 @@ export default function ComposeBox({ onNewMessage, onSubmitMessage }: Props) {
   const allUsersRef   = useRef<string[]>([])
 
   useEffect(() => {
-    getIdentity().then(setIdentity).finally(() => setIdentityLoading(false))
-    // Pre-fetch users for @mention
+    getIdentity().then(id => {
+      setIdentity(id)
+      setIdentityLoading(false)
+    })
     getUsers().then(u => { allUsersRef.current = u.map(x => x.authorName) }).catch(() => null)
   }, [])
+
+  function handleGoogleSignIn(_profile: GoogleProfile) {
+    getIdentity().then(setIdentity)
+  }
+
+  function handleGoogleSignOut() {
+    clearGoogleIdentity()
+    // Reload with device fingerprint
+    getIdentity().then(setIdentity)
+  }
 
   // Detect @mention at cursor
   const handleContentChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -164,21 +177,35 @@ export default function ComposeBox({ onNewMessage, onSubmitMessage }: Props) {
     >
       <div className="rounded-2xl glass-strong neon-border overflow-hidden transition-all duration-300">
         {/* Identity bar */}
-        <div className="flex items-center justify-between px-4 pt-4 pb-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-4 pt-4 pb-2">
           <div className="flex items-center gap-2">
             {identityLoading ? (
               <span className="font-mono text-xs text-void-700 animate-pulse">resolving identity…</span>
             ) : identity ? (
               <>
-                <div className="w-2 h-2 rounded-full animate-pulse-slow"
-                  style={{ backgroundColor: identity.color, boxShadow: `0 0 8px ${identity.color}` }} />
+                {identity.googleProfile?.picture ? (
+                  <img src={identity.googleProfile.picture} alt="" className="w-5 h-5 rounded-full" referrerPolicy="no-referrer" />
+                ) : (
+                  <div className="w-2 h-2 rounded-full animate-pulse-slow"
+                    style={{ backgroundColor: identity.color, boxShadow: `0 0 8px ${identity.color}` }} />
+                )}
                 <span className="font-mono text-xs" style={{ color: identity.color }}>{identity.name}</span>
               </>
             ) : null}
           </div>
-          <div className="flex items-center gap-1.5 font-mono text-[10px] tracking-widest uppercase text-void-700">
-            <Fingerprint className="w-3 h-3" />
-            <span>device-bound</span>
+          <div className="flex items-center gap-2">
+            <GoogleSignInButton
+              signedIn={!!identity?.googleProfile}
+              googleProfile={identity?.googleProfile}
+              onSignIn={handleGoogleSignIn}
+              onSignOut={handleGoogleSignOut}
+            />
+            {!identity?.googleProfile && (
+              <div className="flex items-center gap-1.5 font-mono text-[10px] tracking-widest uppercase text-void-700">
+                <Fingerprint className="w-3 h-3" />
+                <span>device-bound</span>
+              </div>
+            )}
           </div>
         </div>
 
