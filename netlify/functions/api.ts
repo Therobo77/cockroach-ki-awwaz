@@ -55,6 +55,15 @@ export const handler: Handler = async (event: HandlerEvent) => {
   const reactionsMatch = /\/api\/messages\/([^/]+)\/reactions$/.exec(normalizedPath)
 
   try {
+    // GET /api/identity — return client IP for deterministic identity
+    if (normalizedPath === '/api/identity' && method === 'GET') {
+      const ip =
+        event.headers['x-nf-client-connection-ip'] ||
+        event.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
+        '0.0.0.0'
+      return json(200, { ip })
+    }
+
     // GET /api/messages
     if (isMessages && method === 'GET') {
       const limit = Math.min(

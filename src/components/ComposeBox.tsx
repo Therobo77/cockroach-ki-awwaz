@@ -1,8 +1,8 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Send, Shuffle } from 'lucide-react'
+import { Send, Fingerprint } from 'lucide-react'
 import { v4 as uuidv4 } from 'uuid'
-import { generateAnonName } from '../utils/names'
+import { getIdentity, type Identity } from '../utils/identity'
 import type { Message } from '../types'
 
 interface Props {
@@ -13,18 +13,21 @@ interface Props {
 const MAX_CHARS = 500
 
 export default function ComposeBox({ onNewMessage, onSubmitMessage }: Props) {
-  const [content, setContent]   = useState('')
-  const [identity, setIdentity] = useState(generateAnonName)
-  const [sending, setSending]   = useState(false)
+  const [content, setContent]       = useState('')
+  const [identity, setIdentity]     = useState<Identity | null>(null)
+  const [identityLoading, setIdentityLoading] = useState(true)
+  const [sending, setSending]       = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  const charCount = content.trim().length
-  const canSend   = charCount > 0 && charCount <= MAX_CHARS
+  useEffect(() => {
+    getIdentity()
+      .then(setIdentity)
+      .finally(() => setIdentityLoading(false))
+  }, [])
 
-  function reroll() {
-    setIdentity(generateAnonName())
-  }
+  const charCount = content.trim().length
+  const canSend   = charCount > 0 && charCount <= MAX_CHARS && identity !== null
 
   function handleKeyDown(e: React.KeyboardEvent) {
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && canSend) {
@@ -33,7 +36,7 @@ export default function ComposeBox({ onNewMessage, onSubmitMessage }: Props) {
   }
 
   async function submit() {
-    if (!canSend || sending) return
+    if (!canSend || sending || !identity) return
     setSending(true)
     setSubmitError(null)
 
@@ -50,7 +53,6 @@ export default function ComposeBox({ onNewMessage, onSubmitMessage }: Props) {
       const created = await onSubmitMessage(msg)
       onNewMessage(created)
       setContent('')
-      setIdentity(generateAnonName())
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : 'Failed to send message')
     } finally {
@@ -75,24 +77,24 @@ export default function ComposeBox({ onNewMessage, onSubmitMessage }: Props) {
         {/* Identity bar */}
         <div className="flex items-center justify-between px-4 pt-4 pb-2">
           <div className="flex items-center gap-2">
-            <div
-              className="w-2 h-2 rounded-full animate-pulse-slow"
-              style={{ backgroundColor: identity.color, boxShadow: `0 0 8px ${identity.color}` }}
-            />
-            <span className="font-mono text-xs" style={{ color: identity.color }}>
-              {identity.name}
-            </span>
-            <button
-              onClick={reroll}
-              title="New anonymous identity"
-              className="ml-1 p-1 rounded-md text-void-600 hover:text-roach-500 hover:bg-roach-500/10 transition-colors"
-            >
-              <Shuffle className="w-3 h-3" />
-            </button>
+            {identityLoading ? (
+              <span className="font-mono text-xs text-void-700 animate-pulse">resolving identity…</span>
+            ) : identity ? (
+              <>
+                <div
+                  className="w-2 h-2 rounded-full animate-pulse-slow"
+                  style={{ backgroundColor: identity.color, boxShadow: `0 0 8px ${identity.color}` }}
+                />
+                <span className="font-mono text-xs" style={{ color: identity.color }}>
+                  {identity.name}
+                </span>
+              </>
+            ) : null}
           </div>
-          <span className="font-mono text-[10px] tracking-widest uppercase text-void-700">
-            anonymous
-          </span>
+          <div className="flex items-center gap-1.5 font-mono text-[10px] tracking-widest uppercase text-void-700">
+            <Fingerprint className="w-3 h-3" />
+            <span>device-bound</span>
+          </div>
         </div>
 
         {/* Divider */}
@@ -160,3 +162,4 @@ export default function ComposeBox({ onNewMessage, onSubmitMessage }: Props) {
     </motion.div>
   )
 }
+

@@ -22,3 +22,12 @@ export function generateAnonName(): { name: string; color: string } {
   const color = COLORS[Math.floor(Math.random() * COLORS.length)]
   return { name: `${adj}_${noun}_${num}`, color }
 }
+
+export function generateFromSeed(seed: number): { name: string; color: string } {
+  const s = Math.abs(seed)
+  const adj   = ADJECTIVES[s % ADJECTIVES.length]
+  const noun  = NOUNS[Math.floor(s / ADJECTIVES.length) % NOUNS.length]
+  const num   = (Math.floor(s / (ADJECTIVES.length * NOUNS.length)) % 99) + 1
+  const color = COLORS[Math.floor(s / (ADJECTIVES.length * NOUNS.length * 99)) % COLORS.length]
+  return { name: `${adj}_${noun}_${num}`, color }
+}
