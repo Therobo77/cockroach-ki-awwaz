@@ -14,6 +14,8 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=4000
 
+RUN apt-get update -y && apt-get install -y openssl --no-install-recommends && rm -rf /var/lib/apt/lists/*
+
 COPY package*.json ./
 COPY prisma ./prisma
 RUN npm ci --omit=dev
