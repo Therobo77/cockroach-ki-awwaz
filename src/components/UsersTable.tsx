@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { formatDistanceToNow } from 'date-fns'
 import { Users, Monitor, Globe, RefreshCw, MessageSquare } from 'lucide-react'
@@ -99,9 +100,13 @@ export default function UsersTable() {
                         >
                           {user.authorName.charAt(0)}
                         </div>
-                        <span className="font-mono text-xs font-medium whitespace-nowrap" style={{ color: user.authorColor }}>
+                        <Link
+                          to={`/u/${encodeURIComponent(user.authorName)}`}
+                          className="font-mono text-xs font-medium hover:underline underline-offset-2 whitespace-nowrap"
+                          style={{ color: user.authorColor }}
+                        >
                           {user.authorName}
-                        </span>
+                        </Link>
                       </div>
                     </td>
 

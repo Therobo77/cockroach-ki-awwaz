@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from 'react'
+import { Routes, Route } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { MessageSquare, Users } from 'lucide-react'
 import { getMessages, addMessage, addReaction } from './utils/api.ts'
@@ -8,10 +9,20 @@ import Header from './components/Header'
 import ComposeBox from './components/ComposeBox'
 import MessageBoard from './components/MessageBoard'
 import UsersTable from './components/UsersTable'
+import UserProfile from './components/UserProfile'
 
 type Tab = 'messages' | 'users'
 
 export default function App() {
+  return (
+    <Routes>
+      <Route path="/u/:username" element={<UserProfile />} />
+      <Route path="/*" element={<MainApp />} />
+    </Routes>
+  )
+}
+
+function MainApp() {
   const [tab, setTab]           = useState<Tab>('messages')
   const [messages, setMessages] = useState<Message[]>([])
   const [loading, setLoading]   = useState(true)
@@ -108,10 +119,10 @@ export default function App() {
             )}
           </>
         ) : (
+
           <UsersTable />
         )}
       </div>
     </div>
   )
 }
-

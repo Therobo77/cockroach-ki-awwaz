@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { Link } from 'react-router-dom'
 import { formatDistanceToNow } from 'date-fns'
 import { ExternalLink, X } from 'lucide-react'
 import type { Message } from '../types'
@@ -77,9 +78,13 @@ export default function MessageCard({ message, index, myName, onReact }: Props) 
             >
               {message.authorName.charAt(0)}
             </div>
-            <span className="font-mono text-xs font-medium" style={{ color: message.authorColor }}>
+            <Link
+              to={`/u/${encodeURIComponent(message.authorName)}`}
+              className="font-mono text-xs font-medium hover:underline underline-offset-2"
+              style={{ color: message.authorColor }}
+            >
               {message.authorName}
-            </span>
+            </Link>
           </div>
           <time className="font-mono text-[11px] text-void-700" dateTime={new Date(message.timestamp).toISOString()}>
             {formatDistanceToNow(message.timestamp, { addSuffix: true })}

@@ -87,6 +87,16 @@ export async function getUsers(): Promise<UserDevice[]> {
   return request<UserDevice[]>('/users')
 }
 
+export interface UserProfileData {
+  user: UserDevice
+  messages: Message[]
+  stats: { messageCount: number; totalReactions: number }
+}
+
+export async function getUserProfile(username: string): Promise<UserProfileData> {
+  return request<UserProfileData>(`/users/${encodeURIComponent(username)}`)
+}
+
 export async function getNotifications(deviceId: string): Promise<AppNotification[]> {
   return request<AppNotification[]>(`/notifications?deviceId=${encodeURIComponent(deviceId)}`)
 }

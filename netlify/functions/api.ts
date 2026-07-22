@@ -121,6 +121,37 @@ export const handler: Handler = async (event: HandlerEvent) => {
       return json(200, { ok: true })
     }
 
+    // GET /api/users/:username — single user profile with their messages
+    const userProfileMatch = /\/api\/users\/([^/]+)$/.exec(normalizedPath)
+    if (userProfileMatch && method === 'GET') {
+      const username = decodeURIComponent(userProfileMatch[1])
+      const user = await prisma.userDevice.findFirst({ where: { authorName: username } })
+      if (!user) return json(404, { error: 'User not found' })
+
+      const messages = await prisma.message.findMany({
+        where: { authorName: username },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+        include: { reactions: { select: { emoji: true, count: true } } },
+      })
+
+      const totalReactions = messages.reduce(
+        (sum, msg) => sum + msg.reactions.reduce((s, r) => s + r.count, 0), 0,
+      )
+
+      return json(200, {
+        user: {
+          id: user.id, authorName: user.authorName, authorColor: user.authorColor,
+          ipAddress: user.ipAddress, os: user.os, browser: user.browser,
+          screenRes: user.screenRes, timezone: user.timezone, language: user.language,
+          cores: user.cores, firstSeen: user.firstSeen.getTime(), lastSeen: user.lastSeen.getTime(),
+          messageCount: messages.length,
+        },
+        messages: messages.map(toApiMessage),
+        stats: { messageCount: messages.length, totalReactions },
+      })
+    }
+
     // GET /api/users — list all known devices
     if (normalizedPath === '/api/users' && method === 'GET') {
       const users = await prisma.userDevice.findMany({ orderBy: { lastSeen: 'desc' } })
