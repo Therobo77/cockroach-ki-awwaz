@@ -223,7 +223,7 @@ export default function ComposeBox({ onNewMessage, onSubmitMessage }: Props) {
               className={`flex items-center gap-2 px-4 py-2 rounded-xl font-mono text-xs font-medium tracking-wider transition-all duration-200 ${
                 canSend
                   ? 'bg-roach-500 text-void-950 hover:bg-roach-400 shadow-lg shadow-roach-500/20'
-                  : 'bg-void-900 text-void-700 cursor-not-allowed'
+                  : 'bg-void-900 text-void-500 border border-void-800 cursor-not-allowed'
               }`}
             >
               <Send className="w-3.5 h-3.5" />
