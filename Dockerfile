@@ -2,6 +2,7 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 COPY package*.json ./
+COPY prisma ./prisma
 RUN npm ci
 
 COPY . .
@@ -14,11 +15,11 @@ ENV NODE_ENV=production
 ENV PORT=4000
 
 COPY package*.json ./
+COPY prisma ./prisma
 RUN npm ci --omit=dev
 
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/server/dist ./server/dist
-COPY --from=builder /app/prisma ./prisma
 
 EXPOSE 4000
 CMD ["sh", "-c", "npm run db:deploy && node server/dist/index.js"]
