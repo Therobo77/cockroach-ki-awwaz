@@ -153,12 +153,16 @@ export const handler: Handler = async (event: HandlerEvent) => {
     if (normalizedPath === '/api/notifications' && method === 'GET') {
       const deviceId = event.queryStringParameters?.deviceId
       if (!deviceId) return json(400, { error: 'deviceId required' })
-      const notes = await prisma.notification.findMany({
-        where: { recipientId: deviceId },
-        orderBy: { createdAt: 'desc' },
-        take: 30,
-      })
-      return json(200, notes.map(n => ({ ...n, createdAt: n.createdAt.getTime() })))
+      try {
+        const notes = await prisma.notification.findMany({
+          where: { recipientId: deviceId },
+          orderBy: { createdAt: 'desc' },
+          take: 30,
+        })
+        return json(200, notes.map(n => ({ ...n, createdAt: n.createdAt.getTime() })))
+      } catch {
+        return json(200, []) // table may not exist yet — return empty gracefully
+      }
     }
 
     // POST /api/notifications/read
@@ -167,10 +171,12 @@ export const handler: Handler = async (event: HandlerEvent) => {
       try { body = JSON.parse(event.body ?? '{}') } catch { /* ignore */ }
       const deviceId = String(body.deviceId ?? '')
       if (!deviceId) return json(400, { error: 'deviceId required' })
-      await prisma.notification.updateMany({
-        where: { recipientId: deviceId, read: false },
-        data:  { read: true },
-      })
+      try {
+        await prisma.notification.updateMany({
+          where: { recipientId: deviceId, read: false },
+          data:  { read: true },
+        })
+      } catch { /* non-fatal */ }
       return json(200, { ok: true })
     }
 
@@ -217,24 +223,34 @@ export const handler: Handler = async (event: HandlerEvent) => {
         include: { reactions: { select: { emoji: true, count: true } } },
       })
 
-      return json(201, toApiMessage(created))
-
-      // Fire mention notifications (non-blocking)
-      void (async () => {
+      // Create mention notifications before returning (must await in serverless)
+      try {
         const mentionPattern = /@([A-Za-z0-9_]+)/g
         let m: RegExpExecArray | null
         const excerpt = created.content.slice(0, 100)
         while ((m = mentionPattern.exec(created.content)) !== null) {
           const mentionedName = m[1]
-          if (mentionedName === payload.authorName) continue // don't self-notify
-          const recipient = await prisma.userDevice.findFirst({ where: { authorName: mentionedName }, select: { id: true } })
+          if (mentionedName === payload.authorName) continue
+          const recipient = await prisma.userDevice.findFirst({
+            where: { authorName: mentionedName },
+            select: { id: true },
+          })
           if (recipient) {
             await prisma.notification.create({
-              data: { recipientId: recipient.id, type: 'mention', messageId: created.id, fromName: payload.authorName, fromColor: payload.authorColor, excerpt },
+              data: {
+                recipientId: recipient.id,
+                type: 'mention',
+                messageId: created.id,
+                fromName: payload.authorName,
+                fromColor: payload.authorColor,
+                excerpt,
+              },
             })
           }
         }
-      })()
+      } catch { /* non-fatal — notification table may not exist yet */ }
+
+      return json(201, toApiMessage(created))
     }
 
     // POST /api/messages/:id/reactions
@@ -273,9 +289,12 @@ export const handler: Handler = async (event: HandlerEvent) => {
         include: { reactions: { select: { emoji: true, count: true } } },
       })
 
-      // Fire reaction notification (non-blocking)
-      void (async () => {
-        const recipient = await prisma.userDevice.findFirst({ where: { authorName: updated.authorName }, select: { id: true } })
+      // Create reaction notification before returning (must await in serverless)
+      try {
+        const recipient = await prisma.userDevice.findFirst({
+          where: { authorName: updated.authorName },
+          select: { id: true },
+        })
         const reactorId = parsed.data.reactorId ?? ''
         if (recipient && recipient.id !== reactorId) {
           await prisma.notification.create({
@@ -290,7 +309,7 @@ export const handler: Handler = async (event: HandlerEvent) => {
             },
           })
         }
-      })()
+      } catch { /* non-fatal — notification table may not exist yet */ }
 
       return json(200, toApiMessage(updated))
     }
