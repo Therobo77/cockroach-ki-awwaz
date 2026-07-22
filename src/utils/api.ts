@@ -1,5 +1,21 @@
 import type { Message } from '../types'
 
+export interface UserDevice {
+  id: string
+  authorName: string
+  authorColor: string
+  ipAddress: string
+  os: string | null
+  browser: string | null
+  screenRes: string | null
+  timezone: string | null
+  language: string | null
+  cores: number
+  firstSeen: number
+  lastSeen: number
+  messageCount: number
+}
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api'
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -43,4 +59,8 @@ export async function addReaction(messageId: string, emoji: string): Promise<Mes
     method: 'POST',
     body: JSON.stringify({ emoji }),
   })
+}
+
+export async function getUsers(): Promise<UserDevice[]> {
+  return request<UserDevice[]>('/users')
 }

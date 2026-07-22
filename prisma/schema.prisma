@@ -30,3 +30,21 @@ model Reaction {
   @@unique([messageId, emoji])
   @@index([messageId])
 }
+
+model UserDevice {
+  id          String   @id
+  authorName  String   @db.VarChar(100)
+  authorColor String   @db.VarChar(32)
+  ipAddress   String   @db.VarChar(64)
+  userAgent   String   @db.Text
+  os          String?  @db.VarChar(50)
+  browser     String?  @db.VarChar(50)
+  screenRes   String?  @db.VarChar(20)
+  timezone    String?  @db.VarChar(100)
+  language    String?  @db.VarChar(20)
+  cores       Int      @default(0)
+  firstSeen   DateTime @default(now())
+  lastSeen    DateTime @default(now())
+
+  @@index([lastSeen(sort: Desc)])
+}

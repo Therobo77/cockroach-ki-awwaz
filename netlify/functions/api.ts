@@ -4,6 +4,24 @@ import type { Handler, HandlerEvent, HandlerResponse } from '@netlify/functions'
 
 const prisma = new PrismaClient()
 
+function parseUA(ua: string): { os: string; browser: string } {
+  let os = 'Unknown'
+  if (/Windows NT/.test(ua))         os = 'Windows'
+  else if (/Android/.test(ua))       os = 'Android'
+  else if (/iPhone|iPad/.test(ua))   os = 'iOS'
+  else if (/Mac OS X/.test(ua))      os = 'macOS'
+  else if (/Linux/.test(ua))         os = 'Linux'
+
+  let browser = 'Unknown'
+  if (/OPR\/|Opera\//.test(ua))                        browser = 'Opera'
+  else if (/Edg\//.test(ua))                            browser = 'Edge'
+  else if (/Chrome\//.test(ua) && !/Chromium/.test(ua)) browser = 'Chrome'
+  else if (/Firefox\//.test(ua))                        browser = 'Firefox'
+  else if (/Safari\//.test(ua) && !/Chrome/.test(ua))   browser = 'Safari'
+
+  return { os, browser }
+}
+
 const createMessageSchema = z.object({
   id: z.string().min(3).max(100).optional(),
   content: z.string().trim().min(1).max(500),
@@ -67,6 +85,65 @@ export const handler: Handler = async (event: HandlerEvent) => {
         event.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
         '0.0.0.0'
       return json(200, { ip })
+    }
+
+    // POST /api/users — upsert device/user record
+    if (normalizedPath === '/api/users' && method === 'POST') {
+      let body: Record<string, unknown> = {}
+      try { body = JSON.parse(event.body ?? '{}') } catch { /* ignore */ }
+
+      const ip =
+        event.headers['x-nf-client-connection-ip'] ||
+        event.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
+        '0.0.0.0'
+
+      const id          = String(body.id ?? '').slice(0, 64)
+      const authorName  = String(body.authorName ?? '').slice(0, 100)
+      const authorColor = String(body.authorColor ?? '#ffffff').slice(0, 32)
+      const userAgent   = String(body.userAgent ?? '').slice(0, 2000)
+      const screenRes   = String(body.screenRes ?? '').slice(0, 20)
+      const timezone    = String(body.timezone ?? '').slice(0, 100)
+      const language    = String(body.language ?? '').slice(0, 20)
+      const cores       = Number(body.cores ?? 0)
+
+      if (!id || !authorName) return json(400, { error: 'id and authorName required' })
+
+      const { os, browser } = parseUA(userAgent)
+
+      await prisma.userDevice.upsert({
+        where: { id },
+        create: { id, authorName, authorColor, ipAddress: ip, userAgent, os, browser, screenRes, timezone, language, cores },
+        update: { authorName, authorColor, ipAddress: ip, lastSeen: new Date() },
+      })
+      return json(200, { ok: true })
+    }
+
+    // GET /api/users — list all known devices
+    if (normalizedPath === '/api/users' && method === 'GET') {
+      const users = await prisma.userDevice.findMany({ orderBy: { lastSeen: 'desc' } })
+
+      const counts = await prisma.message.groupBy({
+        by: ['authorName'],
+        _count: { id: true },
+      })
+      const countMap: Record<string, number> = {}
+      for (const c of counts) countMap[c.authorName] = c._count.id
+
+      return json(200, users.map(u => ({
+        id:          u.id,
+        authorName:  u.authorName,
+        authorColor: u.authorColor,
+        ipAddress:   u.ipAddress,
+        os:          u.os,
+        browser:     u.browser,
+        screenRes:   u.screenRes,
+        timezone:    u.timezone,
+        language:    u.language,
+        cores:       u.cores,
+        firstSeen:   u.firstSeen.getTime(),
+        lastSeen:    u.lastSeen.getTime(),
+        messageCount: countMap[u.authorName] ?? 0,
+      })))
     }
 
     // GET /api/messages
