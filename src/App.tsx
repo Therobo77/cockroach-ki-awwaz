@@ -9,7 +9,7 @@ import Header from './components/Header'
 import ComposeBox from './components/ComposeBox'
 import MessageBoard from './components/MessageBoard'
 import UsersTable from './components/UsersTable'
-import UserProfile from './components/UserProfile'
+import UserProfile from './components/UserProfile.tsx'
 
 type Tab = 'messages' | 'users'
 
